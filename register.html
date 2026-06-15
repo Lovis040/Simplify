@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Join Tick It</title>
+  <title>Join Tick-It</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -25,14 +25,14 @@
   <div class="w-full max-w-md">
     <div class="text-center mb-8">
       <a href="index.html" class="inline-flex items-center gap-2 font-bold text-2xl" style="color:#818cf8">
-        <img src="logo.png" alt="Tick It" style="height:36px;width:auto" />
-        Tick It
+        <img src="logo.png" alt="Tick-It" style="height:36px;width:auto" />
+        Tick-It
       </a>
       <p class="mt-2 text-sm" style="color:var(--muted)">Create your free account</p>
     </div>
 
     <div class="rounded-2xl p-8" style="background:var(--surface);border:1px solid var(--border)">
-      <h1 class="text-xl font-bold mb-6" style="color:var(--text)">Join Tick It</h1>
+      <h1 class="text-xl font-bold mb-6" style="color:var(--text)">Join Tick-It</h1>
 
       <form id="register-form" class="space-y-4">
         <div>
@@ -77,7 +77,7 @@
       STATE.users.push({
         id, name,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
-        bio: bio || "New to Tick It!",
+        bio: bio || "New to Tick-It!",
         joinedAt: new Date().toISOString().split("T")[0],
         eventsCreated: 0, eventsJoined: 0,
       });
