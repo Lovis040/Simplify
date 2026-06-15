@@ -200,7 +200,17 @@
   <!-- Sidebar -->
   <aside style="width:300px;min-width:300px;background:var(--bg);border-right:1px solid var(--border);
     display:flex;flex-direction:column;overflow:hidden">
-    <div style="padding:16px 16px 12px;border-bottom:1px solid var(--border)">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
+      <button onclick="switchTab('events')"
+        style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+          color:var(--muted);background:transparent;border:none;cursor:pointer;padding:0;margin-bottom:10px;
+          transition:color .15s"
+        onmouseover="this.style.color='#f0f0f0'" onmouseout="this.style.color='var(--muted)'">
+        <svg style="width:14px;height:14px" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+        </svg>
+        Back to events
+      </button>
       <p style="font-size:14px;font-weight:600;color:var(--text)">Events in Berlin</p>
       <p id="nm-status" style="font-size:12px;margin-top:2px;color:var(--muted)"></p>
     </div>
