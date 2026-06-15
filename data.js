@@ -81,14 +81,14 @@ const INITIAL_EVENTS = [
 // ── Persistent state in localStorage ──────────────────────────────────────────
 function loadState() {
   try {
-    const raw = localStorage.getItem("eventure");
+    const raw = localStorage.getItem("simplify");
     if (raw) return JSON.parse(raw);
   } catch {}
   return { users: INITIAL_USERS, events: INITIAL_EVENTS, currentUserId: "user-4" };
 }
 
 function saveState() {
-  localStorage.setItem("eventure", JSON.stringify(STATE));
+  localStorage.setItem("simplify", JSON.stringify(STATE));
 }
 
 const STATE = loadState();
