@@ -20,9 +20,9 @@ const CATEGORY_EMOJIS = {
   "other":         "💡",
 };
 
-// Superhost: users who have hosted 5+ events
+// Superhost: users who have hosted 8+ events
 function isSuperhost(user) {
-  return user && user.eventsCreated >= 5;
+  return user && user.eventsCreated >= 8;
 }
 
 const SUPERHOST_BADGE = `

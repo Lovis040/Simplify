@@ -119,48 +119,9 @@ function initNearMeMap() {
     nearMeMarkers.push({ id: event.id, marker });
   });
 
-  renderNmList(STATE.events);
-
-  // Geolocation
   const statusEl = document.getElementById("nm-status");
-  if (!navigator.geolocation) {
-    statusEl.textContent = "Geolocation not supported — showing Berlin";
-    return;
-  }
-
-  statusEl.textContent = "Requesting location…";
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      userLatLng = [pos.coords.latitude, pos.coords.longitude];
-
-      // User dot with pulsing ring
-      const userIcon = L.divIcon({
-        className: "",
-        html: `<div style="position:relative;width:20px;height:20px">
-          <div class="user-dot-ring"></div>
-          <div class="user-dot-core"></div>
-        </div>`,
-        iconSize: [20, 20],
-        iconAnchor: [10, 10],
-      });
-      L.marker(userLatLng, { icon: userIcon, zIndexOffset: 1000 })
-       .bindTooltip("You are here", { permanent: false, direction: "top" })
-       .addTo(nearMeMap);
-
-      nearMeMap.flyTo(userLatLng, 14, { duration: 1 });
-
-      // Sort events by distance and update sidebar
-      const sorted = [...STATE.events].sort((a, b) =>
-        distanceKm(userLatLng[0], userLatLng[1], a.location.lat, a.location.lng) -
-        distanceKm(userLatLng[0], userLatLng[1], b.location.lat, b.location.lng)
-      );
-      renderNmList(sorted);
-      statusEl.textContent = `${sorted.length} event${sorted.length !== 1 ? "s" : ""} — sorted by distance`;
-    },
-    err => {
-      statusEl.textContent = "Location denied — showing all events in Berlin";
-    }
-  );
+  statusEl.textContent = `${STATE.events.length} events in Berlin`;
+  renderNmList(STATE.events);
 }
 
 function renderNmList(events) {
