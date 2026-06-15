@@ -141,6 +141,7 @@
             <div class="flex items-center gap-3 flex-wrap">
               <h1 class="text-2xl font-bold" style="color:var(--text)">${u.name}</h1>
               ${isOwn ? '<span class="text-xs font-semibold px-2.5 py-0.5 rounded-full" style="color:#818cf8;border:1px solid #3730a3;background:#1e1b4b">You</span>' : ""}
+              ${isSuperhost(u) ? SUPERHOST_BADGE : ""}
             </div>
             <p class="mt-1 text-sm" style="color:#9ca3af">${u.bio}</p>
             <p class="text-sm mt-2" style="color:var(--muted)">Joined ${formatMonth(u.joinedAt)}</p>

@@ -71,7 +71,7 @@ function initNearMeMap() {
   if (nearMeMap) return; // already built
 
   nearMeMap = L.map("near-me-map", {
-    center: [48.2082, 16.3738],
+    center: [52.5200, 13.4050],
     zoom: 13,
     zoomControl: false,
   });
@@ -124,7 +124,7 @@ function initNearMeMap() {
   // Geolocation
   const statusEl = document.getElementById("nm-status");
   if (!navigator.geolocation) {
-    statusEl.textContent = "Geolocation not supported — showing Vienna";
+    statusEl.textContent = "Geolocation not supported — showing Berlin";
     return;
   }
 
@@ -158,7 +158,7 @@ function initNearMeMap() {
       statusEl.textContent = `${sorted.length} event${sorted.length !== 1 ? "s" : ""} — sorted by distance`;
     },
     err => {
-      statusEl.textContent = "Location denied — showing all events in Vienna";
+      statusEl.textContent = "Location denied — showing all events in Berlin";
     }
   );
 }
@@ -355,12 +355,13 @@ function renderGrid() {
 
         <!-- Host + badge -->
         <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between">
-          <div style="display:flex;align-items:center;gap:8px">
-            <img src="${host?.avatar ?? ""}" style="width:24px;height:24px;border-radius:50%" alt="${host?.name ?? ""}" />
-            <span style="font-size:12px;font-weight:500;color:#b0b0b0">${host?.name ?? "Unknown"}</span>
+          <div style="display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden">
+            <img src="${host?.avatar ?? ""}" style="width:24px;height:24px;border-radius:50%;flex-shrink:0" alt="${host?.name ?? ""}" />
+            <span style="font-size:12px;font-weight:500;color:#b0b0b0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${host?.name ?? "Unknown"}</span>
+            ${isSuperhost(host) ? SUPERHOST_BADGE : ""}
           </div>
-          ${isHost   ? '<span style="font-size:11px;font-weight:600;color:#818cf8;border:1px solid #3730a3;background:#1e1b4b;padding:2px 8px;border-radius:9999px">Your event</span>' :
-            isJoined ? '<span style="font-size:11px;font-weight:600;color:#34d399;border:1px solid #065f46;background:#022c22;padding:2px 8px;border-radius:9999px">Joined</span>' : ""}
+          ${isHost   ? '<span style="font-size:11px;font-weight:600;color:#818cf8;border:1px solid #3730a3;background:#1e1b4b;padding:2px 8px;border-radius:9999px;flex-shrink:0">Your event</span>' :
+            isJoined ? '<span style="font-size:11px;font-weight:600;color:#34d399;border:1px solid #065f46;background:#022c22;padding:2px 8px;border-radius:9999px;flex-shrink:0">Joined</span>' : ""}
         </div>
       </div>
     </div>`;
@@ -460,7 +461,10 @@ function openModal(eventId) {
         style="color:inherit" onmouseover="this.style.background='#1e1e1e'" onmouseout="this.style.background='transparent'">
         <img src="${host?.avatar ?? ""}" class="h-10 w-10 rounded-full" alt="${host?.name ?? ""}" />
         <div>
-          <p class="font-semibold text-sm" style="color:#f0f0f0">${host?.name ?? "Unknown"}</p>
+          <p class="font-semibold text-sm flex items-center gap-2 flex-wrap" style="color:#f0f0f0">
+            ${host?.name ?? "Unknown"}
+            ${isSuperhost(host) ? SUPERHOST_BADGE : ""}
+          </p>
           <p class="text-xs line-clamp-1" style="color:#888">${host?.bio ?? ""}</p>
         </div>
       </a>

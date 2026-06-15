@@ -52,7 +52,7 @@
 
   <div id="form-wrap" class="rounded-2xl p-8" style="background:var(--surface);border:1px solid var(--border)">
     <h1 class="text-2xl font-bold mb-1" style="color:var(--text)">Post an event</h1>
-    <p class="text-sm mb-8" style="color:var(--muted)">Share something fun with your community in Vienna.</p>
+    <p class="text-sm mb-8" style="color:var(--muted)">Share something fun with your community in Berlin.</p>
 
     <form id="event-form" class="space-y-6">
       <div>
@@ -89,14 +89,14 @@
       <div>
         <label class="block text-sm font-medium mb-1.5" style="color:#9ca3af">Location *</label>
         <select id="location-preset" class="mb-2">
-          <option value="Café Central|Herrengasse 14, 1010 Wien|48.2102|16.3662">Café Central</option>
-          <option value="Prater Hauptallee|Prater, 1020 Wien|48.2156|16.3961">Prater Hauptallee</option>
-          <option value="Naschmarkt|Naschmarkt, 1060 Wien|48.1985|16.3626">Naschmarkt</option>
-          <option value="Stadtpark|Stadtpark, 1030 Wien|48.2037|16.3797">Stadtpark</option>
-          <option value="Votivkirche|Rooseveltplatz, 1090 Wien|48.2231|16.3598">Votivkirche</option>
-          <option value="Mariahilfer Straße|Mariahilfer Str. 10, 1060 Wien|48.1969|16.3536">Mariahilfer Straße</option>
-          <option value="Belvedere|Prinz-Eugen-Str. 27, 1030 Wien|48.1908|16.3805">Belvedere</option>
-          <option value="custom||48.2082|16.3738">Custom address…</option>
+          <option value="Mauerpark|Bernauer Str. 63-64, 13355 Berlin|52.5414|13.4022">Mauerpark</option>
+          <option value="Tiergarten|Tiergarten, 10785 Berlin|52.5144|13.3500">Tiergarten</option>
+          <option value="Hackescher Markt|Hackescher Markt, 10178 Berlin|52.5233|13.4021">Hackescher Markt</option>
+          <option value="Prenzlauer Berg|Kastanienallee 15, 10435 Berlin|52.5348|13.4176">Prenzlauer Berg</option>
+          <option value="Kreuzberg|Oranienstr. 25, 10999 Berlin|52.4994|13.4217">Kreuzberg</option>
+          <option value="RAW Gelände|Revaler Str. 99, 10245 Berlin|52.5079|13.4556">RAW Gelände</option>
+          <option value="Tempelhofer Feld|Tempelhofer Damm 1-7, 12101 Berlin|52.4742|13.4010">Tempelhofer Feld</option>
+          <option value="custom||52.5200|13.4050">Custom address…</option>
         </select>
         <div id="custom-address-wrap" class="hidden">
           <input id="custom-address" type="text" placeholder="Enter address…" />
@@ -159,7 +159,7 @@
     const preset   = document.getElementById("location-preset").value.split("|");
     const isCustom = preset[0] === "custom";
     const location = isCustom
-      ? { name:"Custom", address: document.getElementById("custom-address").value.trim(), lat:48.2082, lng:16.3738 }
+      ? { name:"Custom", address: document.getElementById("custom-address").value.trim(), lat:52.5200, lng:13.4050 }
       : { name:preset[0], address:preset[1], lat:parseFloat(preset[2]), lng:parseFloat(preset[3]) };
 
     const newEvent = {
