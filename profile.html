@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profile — Eventure</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{fontFamily:{sans:['Plus Jakarta Sans','sans-serif']}}}}</script>
+  <style>body{font-family:'Plus Jakarta Sans',sans-serif;} .card-img{transition:transform .3s ease;} .event-card:hover .card-img{transform:scale(1.05);}</style>
+</head>
+<body class="bg-gray-50 antialiased min-h-screen">
+
+<header class="fixed top-0 left-0 right-0 z-30 bg-white border-b border-gray-200 h-16 flex items-center px-6 gap-4">
+  <a href="index.html" class="flex items-center gap-2 text-indigo-600 font-bold text-xl">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+    </svg>
+    Eventure
+  </a>
+  <div class="flex-1"></div>
+  <div id="header-auth"></div>
+</header>
+
+<div class="pt-24 max-w-3xl mx-auto px-4 pb-12">
+  <button onclick="history.back()" class="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-6 transition-colors">
+    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    Back
+  </button>
+
+  <div id="profile-content"></div>
+</div>
+
+<script src="data.js"></script>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const profileId = params.get("id");
+
+  // Header auth
+  function renderHeader() {
+    const user = STATE.users.find(u => u.id === STATE.currentUserId);
+    const el = document.getElementById("header-auth");
+    if (!el) return;
+    if (user) {
+      el.innerHTML = `
+        <div class="flex items-center gap-3">
+          <a href="new-event.html" class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+            Post Event
+          </a>
+          <a href="profile.html?id=${user.id}">
+            <img src="${user.avatar}" class="h-8 w-8 rounded-full" alt="${user.name}" />
+          </a>
+          <button onclick="logout()" class="text-gray-400 hover:text-gray-600" title="Sign out">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+          </button>
+        </div>`;
+    } else {
+      el.innerHTML = `
+        <div class="flex items-center gap-2">
+          <a href="login.html" class="text-sm font-medium text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">Sign in</a>
+          <a href="register.html" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors">Join free</a>
+        </div>`;
+    }
+  }
+
+  function logout() {
+    STATE.currentUserId = null;
+    saveState();
+    renderHeader();
+  }
+
+  function formatMonth(dateStr) {
+    const d = new Date(dateStr + "T00:00:00");
+    return d.toLocaleDateString("en-GB", { month:"long", year:"numeric" });
+  }
+
+  function formatDateShort(dateStr) {
+    const d = new Date(dateStr + "T00:00:00");
+    return d.toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" });
+  }
+
+  function eventCardHTML(event) {
+    const host = STATE.users.find(u => u.id === event.hostId);
+    const spotsLeft = event.maxAttendees - event.attendees.length;
+    const isFull = spotsLeft === 0;
+    const isJoined = STATE.currentUserId && event.attendees.includes(STATE.currentUserId);
+    const isHost = STATE.currentUserId === event.hostId;
+    const color = { "food & drinks":"#f97316","sports":"#22c55e","arts & culture":"#a855f7","music":"#ec4899","networking":"#3b82f6","outdoor":"#84cc16","gaming":"#f59e0b","other":"#6366f1" }[event.category] ?? "#6366f1";
+
+    return `
+    <a href="index.html?event=${event.id}" class="event-card block bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-150">
+      ${event.imageUrl ? `
+        <div class="relative h-36 overflow-hidden">
+          <img src="${event.imageUrl}" class="card-img w-full h-full object-cover" />
+          <div class="absolute top-3 left-3 text-xs font-semibold text-white px-2.5 py-1 rounded-full capitalize" style="background:${color}">${event.category}</div>
+        </div>` : ""}
+      <div class="p-4">
+        <h3 class="font-semibold text-gray-900 text-sm mb-2 line-clamp-2">${event.title}</h3>
+        <div class="text-xs text-gray-500 space-y-1">
+          <div>${formatDateShort(event.date)} · ${event.time}</div>
+          <div>${event.location.name}</div>
+          <div>${event.attendees.length}/${event.maxAttendees} joined</div>
+        </div>
+        <div class="mt-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <img src="${host?.avatar ?? ""}" class="h-6 w-6 rounded-full" />
+            <span class="text-xs text-gray-500">${host?.name ?? ""}</span>
+          </div>
+          ${isHost ? '<span class="text-xs font-medium text-indigo-600 border border-indigo-200 rounded-full px-2 py-0.5">Your event</span>' :
+            isJoined ? '<span class="text-xs font-medium text-green-600 border border-green-200 rounded-full px-2 py-0.5">Joined</span>' : ""}
+        </div>
+      </div>
+    </a>`;
+  }
+
+  function renderProfile() {
+    const u = STATE.users.find(u => u.id === profileId);
+    const el = document.getElementById("profile-content");
+    if (!u) {
+      el.innerHTML = `<div class="text-center py-20 text-gray-400"><p>User not found.</p></div>`;
+      return;
+    }
+
+    const isOwn = STATE.currentUserId === u.id;
+    const hosted = STATE.events.filter(e => e.hostId === u.id);
+    const joined = STATE.events.filter(e => e.hostId !== u.id && e.attendees.includes(u.id));
+
+    el.innerHTML = `
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 mb-6">
+        <div class="flex items-start gap-6">
+          <img src="${u.avatar}" class="h-20 w-20 rounded-full shrink-0" alt="${u.name}" />
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-3 flex-wrap">
+              <h1 class="text-2xl font-bold text-gray-900">${u.name}</h1>
+              ${isOwn ? '<span class="text-xs font-semibold text-indigo-600 border border-indigo-200 rounded-full px-2.5 py-0.5">You</span>' : ""}
+            </div>
+            <p class="text-gray-500 mt-1 text-sm">${u.bio}</p>
+            <p class="text-sm text-gray-400 mt-2">Joined ${formatMonth(u.joinedAt)}</p>
+            <div class="flex items-center gap-6 mt-4">
+              <div class="text-center">
+                <p class="text-2xl font-bold text-gray-900">${u.eventsCreated}</p>
+                <p class="text-xs text-gray-500">Events hosted</p>
+              </div>
+              <div class="w-px h-8 bg-gray-200"></div>
+              <div class="text-center">
+                <p class="text-2xl font-bold text-gray-900">${u.eventsJoined}</p>
+                <p class="text-xs text-gray-500">Events joined</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      ${hosted.length > 0 ? `
+        <h2 class="text-lg font-semibold text-gray-900 mb-3">${isOwn ? "Your events" : u.name.split(" ")[0] + "'s events"}</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+          ${hosted.map(eventCardHTML).join("")}
+        </div>` : ""}
+
+      ${joined.length > 0 ? `
+        <h2 class="text-lg font-semibold text-gray-900 mb-3">${isOwn ? "Events you've joined" : u.name.split(" ")[0] + " joined"}</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+          ${joined.map(eventCardHTML).join("")}
+        </div>` : ""}
+
+      ${hosted.length === 0 && joined.length === 0 ? `
+        <div class="bg-white rounded-2xl border border-gray-200 p-12 text-center text-gray-400">
+          <p class="text-sm">${isOwn ? "You haven't hosted or joined any events yet." : u.name.split(" ")[0] + " hasn't joined any events yet."}</p>
+          ${isOwn ? '<a href="index.html" class="inline-block mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm">Explore events</a>' : ""}
+        </div>` : ""}
+    `;
+  }
+
+  renderHeader();
+  renderProfile();
+</script>
+</body>
+</html>
