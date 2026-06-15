@@ -51,7 +51,7 @@ function switchTab(tab) {
   } else {
     eventsControls.style.display = "none";
     viewEvents.style.display     = "none";
-    viewNearme.style.display     = "flex";
+    viewNearme.style.display     = "flex"; // #view-nearme is itself a flex row
     buildStaticMap();
   }
 }
@@ -117,8 +117,7 @@ function buildStaticMap() {
       </div>`;
   }).join("");
 
-  const container = document.getElementById("near-me-map");
-  container.style.cssText = "width:100%;height:100%;position:relative;overflow:hidden;background:#111";
+  const container = document.getElementById("nm-map-area");
   container.innerHTML = `
     <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">
       <div style="

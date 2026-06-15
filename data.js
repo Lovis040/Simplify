@@ -110,7 +110,7 @@ const INITIAL_EVENTS = [
 ];
 
 // ── Persistent state in localStorage ──────────────────────────────────────────
-const DATA_VERSION = "v3-berlin";
+const DATA_VERSION = "v4-tickit";
 
 function loadState() {
   try {

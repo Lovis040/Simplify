@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Join Simplify</title>
+  <title>Join Tick It</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -26,16 +26,15 @@
     <div class="text-center mb-8">
       <a href="index.html" class="inline-flex items-center gap-2 font-bold text-2xl" style="color:#818cf8">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
-        Simplify
+        Tick It
       </a>
       <p class="mt-2 text-sm" style="color:var(--muted)">Create your free account</p>
     </div>
 
     <div class="rounded-2xl p-8" style="background:var(--surface);border:1px solid var(--border)">
-      <h1 class="text-xl font-bold mb-6" style="color:var(--text)">Join Simplify</h1>
+      <h1 class="text-xl font-bold mb-6" style="color:var(--text)">Join Tick It</h1>
 
       <form id="register-form" class="space-y-4">
         <div>
@@ -80,7 +79,7 @@
       STATE.users.push({
         id, name,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
-        bio: bio || "New to Simplify!",
+        bio: bio || "New to Tick It!",
         joinedAt: new Date().toISOString().split("T")[0],
         eventsCreated: 0, eventsJoined: 0,
       });
