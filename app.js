@@ -2,10 +2,8 @@
 let currentCategory = "all";
 let currentSearch   = "";
 let miniMapInstance = null;
-let nearMeMap       = null;
-let nearMeMarkers   = [];
+let nearMeBuilt     = false;
 let currentTab      = "events";
-let userLatLng      = null; // [lat, lng] once geolocation resolves
 
 const CATEGORIES = [
   { label:"All",            value:"all",           emoji:"✨" },
@@ -35,14 +33,6 @@ function spotsText(event) {
   return `<span style="color:#888">${left} spot${left !== 1 ? "s" : ""} left</span>`;
 }
 
-function distanceKm(lat1, lng1, lat2, lng2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 // ── Tab switching ─────────────────────────────────────────────────────────────
 function switchTab(tab) {
   currentTab = tab;
@@ -62,70 +52,88 @@ function switchTab(tab) {
     eventsControls.style.display = "none";
     viewEvents.style.display     = "none";
     viewNearme.style.display     = "flex";
-    initNearMeMap();
-    // Let the browser paint before Leaflet measures the container
-    requestAnimationFrame(() => { if (nearMeMap) nearMeMap.invalidateSize(); });
+    buildStaticMap();
   }
 }
 
-// ── Near me map ───────────────────────────────────────────────────────────────
-function initNearMeMap() {
-  if (nearMeMap) return; // already built
+// ── Near me — static tiled map ────────────────────────────────────────────────
+function buildStaticMap() {
+  if (nearMeBuilt) return;
+  nearMeBuilt = true;
 
-  nearMeMap = L.map("near-me-map", {
-    center: [52.5200, 13.4050],
-    zoom: 13,
-    zoomControl: false,
-  });
+  // 5×3 CartoDB-Dark tile grid at zoom 12, centred on Berlin
+  const ZOOM = 12, TILE = 256;
+  const TX0 = 2198, TX1 = 2202; // 5 columns
+  const TY0 = 1342, TY1 = 1344; // 3 rows
+  const COLS = TX1 - TX0 + 1;   // 5
+  const ROWS = TY1 - TY0 + 1;   // 3
+  const n    = Math.pow(2, ZOOM);
 
-  L.control.zoom({ position: "bottomright" }).addTo(nearMeMap);
+  // Geographic bounds of the tile grid (Mercator / EPSG:3857)
+  const westLng  = TX0 / n * 360 - 180;
+  const eastLng  = (TX1 + 1) / n * 360 - 180;
+  const northLat = Math.atan(Math.sinh(Math.PI * (1 - 2 * TY0 / n))) * 180 / Math.PI;
+  const southLat = Math.atan(Math.sinh(Math.PI * (1 - 2 * (TY1 + 1) / n))) * 180 / Math.PI;
 
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-    attribution: "© OpenStreetMap © CARTO",
-  }).addTo(nearMeMap);
+  function mercY(lat) {
+    return Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+  }
+  const mN = mercY(northLat), mS = mercY(southLat);
 
-  // Add all event markers
-  STATE.events.forEach(event => {
-    const color  = CATEGORY_COLORS[event.category] ?? "#6366f1";
-    const emoji  = CATEGORY_EMOJIS[event.category] ?? "📍";
+  function pinPos(lat, lng) {
+    const left = ((lng - westLng) / (eastLng - westLng) * 100).toFixed(2);
+    const top  = ((mN - mercY(lat)) / (mN - mS) * 100).toFixed(2);
+    return `left:${left}%;top:${top}%`;
+  }
 
-    const icon = L.divIcon({
-      className: "",
-      html: `<div style="
-        background:${color};color:#fff;
-        border-radius:50% 50% 50% 0;transform:rotate(-45deg);
-        width:36px;height:36px;
-        display:flex;align-items:center;justify-content:center;
-        box-shadow:0 2px 10px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.15);
-      "><span style="transform:rotate(45deg);font-size:14px">${emoji}</span></div>`,
-      iconSize: [36, 36],
-      iconAnchor: [18, 36],
-    });
+  // Tile images
+  const subs = ["a","b","c","d"];
+  let tilesHTML = "";
+  for (let ty = TY0; ty <= TY1; ty++) {
+    for (let tx = TX0; tx <= TX1; tx++) {
+      const s = subs[(tx + ty) % 4];
+      tilesHTML += `<img src="https://${s}.basemaps.cartocdn.com/dark_all/${ZOOM}/${tx}/${ty}.png"
+        width="${TILE}" height="${TILE}" style="display:block;pointer-events:none" />`;
+    }
+  }
 
-    const marker = L.marker([event.location.lat, event.location.lng], { icon });
-    const spotsLeft = event.maxAttendees - event.attendees.length;
+  // Event pins
+  const pinsHTML = STATE.events.map(event => {
+    const color = CATEGORY_COLORS[event.category] ?? "#6366f1";
+    const emoji = CATEGORY_EMOJIS[event.category] ?? "📍";
+    return `
+      <div onclick="openModal('${event.id}');highlightNmCard('${event.id}')"
+        title="${event.title}"
+        style="position:absolute;${pinPos(event.location.lat, event.location.lng)};
+          transform:translate(-50%,-100%);cursor:pointer;pointer-events:auto;z-index:10;
+          transition:transform .12s"
+        onmouseenter="this.style.transform='translate(-50%,-100%) scale(1.25)'"
+        onmouseleave="this.style.transform='translate(-50%,-100%) scale(1)'">
+        <div style="width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+          background:${color};display:flex;align-items:center;justify-content:center;
+          box-shadow:0 3px 12px rgba(0,0,0,.7);border:2px solid rgba(255,255,255,.15)">
+          <span style="transform:rotate(45deg);font-size:13px">${emoji}</span>
+        </div>
+      </div>`;
+  }).join("");
 
-    marker.bindTooltip(`
-      <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;line-height:1.5">
-        <strong>${event.title}</strong><br>
-        ${formatDateShort(event.date)} · ${event.time}<br>
-        ${spotsLeft > 0 ? spotsLeft + " spots left" : "<span style='color:#f87171'>Full</span>"}
-      </div>`, { direction: "top", offset: [0, -10] });
+  const container = document.getElementById("near-me-map");
+  container.style.cssText = "width:100%;height:100%;position:relative;overflow:hidden;background:#111";
+  container.innerHTML = `
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">
+      <div style="
+        display:grid;grid-template-columns:repeat(${COLS},${TILE}px);
+        width:${COLS*TILE}px;height:${ROWS*TILE}px;
+        position:relative">
+        ${tilesHTML}
+        <div style="position:absolute;inset:0;pointer-events:none;z-index:5">
+          ${pinsHTML}
+        </div>
+      </div>
+    </div>`;
 
-    marker.on("click", () => {
-      openModal(event.id);
-      highlightNmCard(event.id);
-    });
-
-    marker.addTo(nearMeMap);
-    nearMeMarkers.push({ id: event.id, marker });
-  });
-
-  const statusEl = document.getElementById("nm-status");
-  statusEl.textContent = `${STATE.events.length} events in Berlin`;
+  document.getElementById("nm-status").textContent = `${STATE.events.length} events in Berlin`;
   renderNmList(STATE.events);
-
-  setTimeout(() => { nearMeMap && nearMeMap.invalidateSize(); }, 100);
 }
 
 function renderNmList(events) {
@@ -135,12 +143,6 @@ function renderNmList(events) {
   list.innerHTML = events.map(event => {
     const color     = CATEGORY_COLORS[event.category] ?? "#6366f1";
     const spotsLeft = event.maxAttendees - event.attendees.length;
-    const distStr   = userLatLng
-      ? (() => {
-          const d = distanceKm(userLatLng[0], userLatLng[1], event.location.lat, event.location.lng);
-          return d < 1 ? `${Math.round(d * 1000)} m away` : `${d.toFixed(1)} km away`;
-        })()
-      : event.location.name;
 
     return `
     <div id="nm-card-${event.id}" class="nm-card p-3" onclick="nmCardClick('${event.id}')">
@@ -152,7 +154,7 @@ function renderNmList(events) {
           <p style="font-size:13px;font-weight:600;color:#f0f0f0;line-height:1.35;margin-bottom:3px" class="line-clamp-2">${event.title}</p>
           <p style="font-size:11px;color:#888;margin-bottom:2px">${formatDateShort(event.date)} · ${event.time}</p>
           <div class="flex items-center justify-between">
-            <p style="font-size:11px;color:#818cf8">${distStr}</p>
+            <p style="font-size:11px;color:#818cf8">${event.location.name}</p>
             <span style="font-size:11px;font-weight:600;color:${spotsLeft === 0 ? '#f87171' : '#34d399'}">${spotsLeft === 0 ? "Full" : spotsLeft + " left"}</span>
           </div>
         </div>
@@ -162,12 +164,6 @@ function renderNmList(events) {
 }
 
 function nmCardClick(eventId) {
-  const entry = nearMeMarkers.find(m => m.id === eventId);
-  if (entry) {
-    const event = STATE.events.find(e => e.id === eventId);
-    if (event) nearMeMap.panTo([event.location.lat, event.location.lng], { animate: true });
-    entry.marker.openTooltip();
-  }
   highlightNmCard(eventId);
   openModal(eventId);
 }
@@ -266,7 +262,6 @@ function renderGrid() {
   grid.innerHTML = filtered.map(event => {
     const host      = STATE.users.find(u => u.id === event.hostId);
     const spotsLeft = event.maxAttendees - event.attendees.length;
-    const isFull    = spotsLeft === 0;
     const isJoined  = STATE.currentUserId && event.attendees.includes(STATE.currentUserId);
     const isHost    = STATE.currentUserId === event.hostId;
     const color     = CATEGORY_COLORS[event.category] ?? "#6366f1";
@@ -284,12 +279,10 @@ function renderGrid() {
         </div>` : ""}
 
       <div class="p-4">
-        <!-- Title — bigger, high contrast -->
         <h3 style="font-size:15px;font-weight:700;color:#f5f5f5;line-height:1.4;margin-bottom:10px" class="line-clamp-2">
           ${event.title}
         </h3>
 
-        <!-- Meta rows — readable grey -->
         <div style="display:flex;flex-direction:column;gap:6px">
           <div style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#b0b0b0">
             <svg style="width:13px;height:13px;color:#818cf8;flex-shrink:0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -318,7 +311,6 @@ function renderGrid() {
           </div>
         </div>
 
-        <!-- Host + badge -->
         <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden">
             <img src="${host?.avatar ?? ""}" style="width:24px;height:24px;border-radius:50%;flex-shrink:0" alt="${host?.name ?? ""}" />
