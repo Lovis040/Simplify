@@ -2,6 +2,10 @@
 let currentCategory = "all";
 let currentSearch   = "";
 let miniMapInstance = null;
+let nearMeMap       = null;
+let nearMeMarkers   = [];
+let currentTab      = "events";
+let userLatLng      = null; // [lat, lng] once geolocation resolves
 
 const CATEGORIES = [
   { label:"All",            value:"all",           emoji:"✨" },
@@ -28,7 +32,188 @@ function formatDateShort(dateStr) {
 function spotsText(event) {
   const left = event.maxAttendees - event.attendees.length;
   if (left === 0) return '<span style="color:#f87171;font-weight:600">Full</span>';
-  return `<span style="color:#6b6b6b">${left} spot${left !== 1 ? "s" : ""} left</span>`;
+  return `<span style="color:#888">${left} spot${left !== 1 ? "s" : ""} left</span>`;
+}
+
+function distanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+
+  document.getElementById("tab-events").classList.toggle("active", tab === "events");
+  document.getElementById("tab-nearme").classList.toggle("active", tab === "nearme");
+
+  const eventsControls = document.getElementById("events-controls");
+  const viewEvents     = document.getElementById("view-events");
+  const viewNearme     = document.getElementById("view-nearme");
+
+  if (tab === "events") {
+    eventsControls.style.display = "";
+    viewEvents.style.display     = "";
+    viewNearme.style.display     = "none";
+  } else {
+    eventsControls.style.display = "none";
+    viewEvents.style.display     = "none";
+    viewNearme.style.display     = "flex";
+    initNearMeMap();
+  }
+}
+
+// ── Near me map ───────────────────────────────────────────────────────────────
+function initNearMeMap() {
+  if (nearMeMap) return; // already built
+
+  nearMeMap = L.map("near-me-map", {
+    center: [48.2082, 16.3738],
+    zoom: 13,
+    zoomControl: false,
+  });
+
+  L.control.zoom({ position: "bottomright" }).addTo(nearMeMap);
+
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    attribution: "© OpenStreetMap © CARTO",
+  }).addTo(nearMeMap);
+
+  // Add all event markers
+  STATE.events.forEach(event => {
+    const color  = CATEGORY_COLORS[event.category] ?? "#6366f1";
+    const emoji  = CATEGORY_EMOJIS[event.category] ?? "📍";
+
+    const icon = L.divIcon({
+      className: "",
+      html: `<div style="
+        background:${color};color:#fff;
+        border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+        width:36px;height:36px;
+        display:flex;align-items:center;justify-content:center;
+        box-shadow:0 2px 10px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.15);
+      "><span style="transform:rotate(45deg);font-size:14px">${emoji}</span></div>`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 36],
+    });
+
+    const marker = L.marker([event.location.lat, event.location.lng], { icon });
+    const spotsLeft = event.maxAttendees - event.attendees.length;
+
+    marker.bindTooltip(`
+      <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;line-height:1.5">
+        <strong>${event.title}</strong><br>
+        ${formatDateShort(event.date)} · ${event.time}<br>
+        ${spotsLeft > 0 ? spotsLeft + " spots left" : "<span style='color:#f87171'>Full</span>"}
+      </div>`, { direction: "top", offset: [0, -10] });
+
+    marker.on("click", () => {
+      openModal(event.id);
+      highlightNmCard(event.id);
+    });
+
+    marker.addTo(nearMeMap);
+    nearMeMarkers.push({ id: event.id, marker });
+  });
+
+  renderNmList(STATE.events);
+
+  // Geolocation
+  const statusEl = document.getElementById("nm-status");
+  if (!navigator.geolocation) {
+    statusEl.textContent = "Geolocation not supported — showing Vienna";
+    return;
+  }
+
+  statusEl.textContent = "Requesting location…";
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLatLng = [pos.coords.latitude, pos.coords.longitude];
+
+      // User dot with pulsing ring
+      const userIcon = L.divIcon({
+        className: "",
+        html: `<div style="position:relative;width:20px;height:20px">
+          <div class="user-dot-ring"></div>
+          <div class="user-dot-core"></div>
+        </div>`,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
+      });
+      L.marker(userLatLng, { icon: userIcon, zIndexOffset: 1000 })
+       .bindTooltip("You are here", { permanent: false, direction: "top" })
+       .addTo(nearMeMap);
+
+      nearMeMap.flyTo(userLatLng, 14, { duration: 1 });
+
+      // Sort events by distance and update sidebar
+      const sorted = [...STATE.events].sort((a, b) =>
+        distanceKm(userLatLng[0], userLatLng[1], a.location.lat, a.location.lng) -
+        distanceKm(userLatLng[0], userLatLng[1], b.location.lat, b.location.lng)
+      );
+      renderNmList(sorted);
+      statusEl.textContent = `${sorted.length} event${sorted.length !== 1 ? "s" : ""} — sorted by distance`;
+    },
+    err => {
+      statusEl.textContent = "Location denied — showing all events in Vienna";
+    }
+  );
+}
+
+function renderNmList(events) {
+  const list = document.getElementById("nm-list");
+  if (!list) return;
+
+  list.innerHTML = events.map(event => {
+    const color     = CATEGORY_COLORS[event.category] ?? "#6366f1";
+    const spotsLeft = event.maxAttendees - event.attendees.length;
+    const distStr   = userLatLng
+      ? (() => {
+          const d = distanceKm(userLatLng[0], userLatLng[1], event.location.lat, event.location.lng);
+          return d < 1 ? `${Math.round(d * 1000)} m away` : `${d.toFixed(1)} km away`;
+        })()
+      : event.location.name;
+
+    return `
+    <div id="nm-card-${event.id}" class="nm-card p-3" onclick="nmCardClick('${event.id}')">
+      <div class="flex items-start gap-3">
+        ${event.imageUrl
+          ? `<img src="${event.imageUrl}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0" />`
+          : `<div style="width:52px;height:52px;border-radius:8px;background:${color}22;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px">${CATEGORY_EMOJIS[event.category] ?? "📍"}</div>`}
+        <div class="min-w-0 flex-1">
+          <p style="font-size:13px;font-weight:600;color:#f0f0f0;line-height:1.35;margin-bottom:3px" class="line-clamp-2">${event.title}</p>
+          <p style="font-size:11px;color:#888;margin-bottom:2px">${formatDateShort(event.date)} · ${event.time}</p>
+          <div class="flex items-center justify-between">
+            <p style="font-size:11px;color:#818cf8">${distStr}</p>
+            <span style="font-size:11px;font-weight:600;color:${spotsLeft === 0 ? '#f87171' : '#34d399'}">${spotsLeft === 0 ? "Full" : spotsLeft + " left"}</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function nmCardClick(eventId) {
+  const entry = nearMeMarkers.find(m => m.id === eventId);
+  if (entry) {
+    const event = STATE.events.find(e => e.id === eventId);
+    if (event) nearMeMap.panTo([event.location.lat, event.location.lng], { animate: true });
+    entry.marker.openTooltip();
+  }
+  highlightNmCard(eventId);
+  openModal(eventId);
+}
+
+function highlightNmCard(eventId) {
+  document.querySelectorAll(".nm-card").forEach(c => c.classList.remove("highlighted"));
+  const card = document.getElementById(`nm-card-${eventId}`);
+  if (card) {
+    card.classList.add("highlighted");
+    card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 }
 
 // ── Header ────────────────────────────────────────────────────────────────────
@@ -46,7 +231,7 @@ function renderHeader() {
           Post Event
         </a>
         <a href="profile.html?id=${user.id}">
-          <img src="${user.avatar}" class="h-8 w-8 rounded-full" style="ring:2px solid transparent" alt="${user.name}" />
+          <img src="${user.avatar}" class="h-8 w-8 rounded-full" alt="${user.name}" />
         </a>
         <button onclick="logout()" style="color:#6b6b6b" onmouseover="this.style.color='#f0f0f0'" onmouseout="this.style.color='#6b6b6b'" title="Sign out">
           <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
@@ -124,39 +309,58 @@ function renderGrid() {
     return `
     <div class="event-card cursor-pointer rounded-xl overflow-hidden" onclick="openModal('${event.id}')">
       ${event.imageUrl ? `
-        <div class="relative h-40 overflow-hidden">
+        <div class="relative h-44 overflow-hidden">
           <img src="${event.imageUrl}" alt="${event.title}" class="card-img w-full h-full object-cover" />
-          <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(0,0,0,.5) 0%,transparent 60%)"></div>
-          <div class="absolute top-3 left-3 text-xs font-semibold text-white px-2.5 py-1 rounded-full capitalize" style="background:${color}">${event.category}</div>
-          <div class="absolute top-3 right-3 text-xs font-semibold px-2 py-1 rounded-full ${event.price === 0 ? "text-emerald-400" : "text-white"}" style="background:rgba(0,0,0,.5)">
+          <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(0,0,0,.6) 0%,transparent 55%)"></div>
+          <div class="absolute top-3 left-3 text-xs font-bold text-white px-2.5 py-1 rounded-full capitalize tracking-wide" style="background:${color}">${event.category}</div>
+          <div class="absolute top-3 right-3 text-xs font-bold px-2.5 py-1 rounded-full" style="background:rgba(0,0,0,.55);backdrop-filter:blur(4px);color:${event.price === 0 ? '#34d399' : '#f0f0f0'}">
             ${event.price === 0 ? "Free" : "€" + event.price}
           </div>
         </div>` : ""}
+
       <div class="p-4">
-        <h3 class="font-semibold text-sm leading-snug mb-3 line-clamp-2" style="color:#f0f0f0">${event.title}</h3>
-        <div class="space-y-1.5 text-xs" style="color:#6b6b6b">
-          <div class="flex items-center gap-1.5">
-            <svg class="h-3.5 w-3.5 shrink-0" style="color:#818cf8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke-width="2"/><line x1="16" y1="2" x2="16" y2="6" stroke-width="2"/><line x1="8" y1="2" x2="8" y2="6" stroke-width="2"/><line x1="3" y1="10" x2="21" y2="10" stroke-width="2"/></svg>
+        <!-- Title — bigger, high contrast -->
+        <h3 style="font-size:15px;font-weight:700;color:#f5f5f5;line-height:1.4;margin-bottom:10px" class="line-clamp-2">
+          ${event.title}
+        </h3>
+
+        <!-- Meta rows — readable grey -->
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#b0b0b0">
+            <svg style="width:13px;height:13px;color:#818cf8;flex-shrink:0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke-width="2"/>
+              <line x1="16" y1="2" x2="16" y2="6" stroke-width="2"/><line x1="8" y1="2" x2="8" y2="6" stroke-width="2"/>
+              <line x1="3" y1="10" x2="21" y2="10" stroke-width="2"/>
+            </svg>
             <span>${formatDateShort(event.date)}</span>
-            <svg class="h-3.5 w-3.5 shrink-0 ml-1" style="color:#818cf8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10" stroke-width="2"/><polyline points="12 6 12 12 16 14" stroke-width="2"/></svg>
+            <svg style="width:13px;height:13px;color:#818cf8;flex-shrink:0;margin-left:4px" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <circle cx="12" cy="12" r="10" stroke-width="2"/><polyline points="12 6 12 12 16 14" stroke-width="2"/>
+            </svg>
             <span>${event.time}</span>
           </div>
-          <div class="flex items-center gap-1.5">
-            <svg class="h-3.5 w-3.5 shrink-0" style="color:#818cf8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-            <span class="truncate">${event.location.name}</span>
+          <div style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#b0b0b0">
+            <svg style="width:13px;height:13px;color:#818cf8;flex-shrink:0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${event.location.name}</span>
           </div>
-          <div class="flex items-center gap-1.5">
-            <svg class="h-3.5 w-3.5 shrink-0" style="color:#818cf8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg>
+          <div style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#b0b0b0">
+            <svg style="width:13px;height:13px;color:#818cf8;flex-shrink:0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/>
+            </svg>
             <span>${event.attendees.length}/${event.maxAttendees} joined · ${spotsText(event)}</span>
           </div>
         </div>
-        <div class="mt-3 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <img src="${host?.avatar ?? ""}" class="h-6 w-6 rounded-full" alt="${host?.name ?? ""}" />
-            <span class="text-xs" style="color:#6b6b6b">${host?.name ?? "Unknown"}</span>
+
+        <!-- Host + badge -->
+        <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:8px">
+            <img src="${host?.avatar ?? ""}" style="width:24px;height:24px;border-radius:50%" alt="${host?.name ?? ""}" />
+            <span style="font-size:12px;font-weight:500;color:#b0b0b0">${host?.name ?? "Unknown"}</span>
           </div>
-          ${isHost   ? '<span class="text-xs font-medium px-2 py-0.5 rounded-full" style="color:#818cf8;border:1px solid #3730a3;background:#1e1b4b">Your event</span>' :
-            isJoined ? '<span class="text-xs font-medium px-2 py-0.5 rounded-full" style="color:#34d399;border:1px solid #065f46;background:#022c22">Joined</span>' : ""}
+          ${isHost   ? '<span style="font-size:11px;font-weight:600;color:#818cf8;border:1px solid #3730a3;background:#1e1b4b;padding:2px 8px;border-radius:9999px">Your event</span>' :
+            isJoined ? '<span style="font-size:11px;font-weight:600;color:#34d399;border:1px solid #065f46;background:#022c22;padding:2px 8px;border-radius:9999px">Joined</span>' : ""}
         </div>
       </div>
     </div>`;
@@ -198,17 +402,17 @@ function openModal(eventId) {
     ${event.imageUrl ? `
       <div class="relative -mx-6 -mt-6 mb-5">
         <img src="${event.imageUrl}" alt="${event.title}" class="w-full h-52 object-cover" />
-        <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(0,0,0,.6) 0%,transparent 50%)"></div>
-        <div class="absolute bottom-3 left-6 text-xs font-semibold text-white px-3 py-1 rounded-full capitalize" style="background:${color}">${event.category}</div>
+        <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(0,0,0,.65) 0%,transparent 50%)"></div>
+        <div class="absolute bottom-3 left-6 text-xs font-bold text-white px-3 py-1 rounded-full capitalize tracking-wide" style="background:${color}">${event.category}</div>
       </div>` : ""}
 
     <div class="flex items-start justify-between gap-3 mb-4">
       <div>
-        ${!event.imageUrl ? `<span class="inline-block text-xs font-semibold text-white px-2.5 py-0.5 rounded-full capitalize mb-2" style="background:${color}">${event.category}</span>` : ""}
-        <h2 class="text-xl font-bold leading-tight" style="color:#f0f0f0">${event.title}</h2>
+        ${!event.imageUrl ? `<span class="inline-block text-xs font-bold text-white px-2.5 py-0.5 rounded-full capitalize mb-2 tracking-wide" style="background:${color}">${event.category}</span>` : ""}
+        <h2 class="font-bold leading-tight" style="color:#f5f5f5;font-size:1.2rem">${event.title}</h2>
       </div>
-      <span class="shrink-0 mt-1 text-xs font-semibold px-2.5 py-1 rounded-full ${event.price === 0 ? "" : ""}"
-        style="${event.price === 0 ? "background:#022c22;color:#34d399" : "background:#1e1e1e;color:#9ca3af"}">
+      <span class="shrink-0 mt-1 text-xs font-bold px-2.5 py-1 rounded-full"
+        style="${event.price === 0 ? "background:#022c22;color:#34d399" : "background:#1e1e1e;color:#b0b0b0"}">
         ${event.price === 0 ? "Free" : "€" + event.price}
       </span>
     </div>
@@ -217,12 +421,12 @@ function openModal(eventId) {
       <div class="rounded-xl p-3" style="background:#1e1e1e">
         <svg class="h-4 w-4 mb-1" style="color:#818cf8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke-width="2"/><line x1="16" y1="2" x2="16" y2="6" stroke-width="2"/><line x1="8" y1="2" x2="8" y2="6" stroke-width="2"/><line x1="3" y1="10" x2="21" y2="10" stroke-width="2"/></svg>
         <p class="text-xs font-semibold leading-tight" style="color:#f0f0f0">${formatDateShort(event.date)}</p>
-        <p class="text-xs" style="color:#6b6b6b">${event.time}</p>
+        <p class="text-xs" style="color:#888">${event.time}</p>
       </div>
       <div class="rounded-xl p-3" style="background:#1e1e1e">
         <svg class="h-4 w-4 mb-1" style="color:#818cf8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg>
         <p class="text-xs font-semibold" style="color:#f0f0f0">${event.attendees.length}/${event.maxAttendees}</p>
-        <p class="text-xs" style="color:#6b6b6b">${isFull ? "Full" : spotsLeft + " left"}</p>
+        <p class="text-xs" style="color:#888">${isFull ? "Full" : spotsLeft + " left"}</p>
       </div>
       <div class="rounded-xl p-3" style="background:#1e1e1e">
         <svg class="h-4 w-4 mb-1" style="color:#818cf8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -230,48 +434,47 @@ function openModal(eventId) {
       </div>
     </div>
 
-    <p class="text-sm leading-relaxed mb-5" style="color:#9ca3af">${event.description}</p>
+    <p class="text-sm leading-relaxed mb-5" style="color:#b0b0b0">${event.description}</p>
 
     <hr style="border-color:#2a2a2a" class="mb-5" />
 
     <!-- Mini map -->
     <div class="mb-5">
       <div class="flex items-center justify-between mb-2">
-        <p class="text-xs font-semibold uppercase tracking-wide" style="color:#6b6b6b">Location</p>
+        <p class="text-xs font-semibold uppercase tracking-wide" style="color:#888">Location</p>
         <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 text-xs transition-colors" style="color:#818cf8">
           Open in Maps
           <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
         </a>
       </div>
       <div id="mini-map" class="h-40 rounded-xl overflow-hidden" style="border:1px solid #2a2a2a;background:#1a1a1a"></div>
-      <p class="text-xs mt-1.5" style="color:#6b6b6b">${event.location.address}</p>
+      <p class="text-xs mt-1.5" style="color:#888">${event.location.address}</p>
     </div>
 
     <hr style="border-color:#2a2a2a" class="mb-5" />
 
     <!-- Host -->
     <div class="mb-5">
-      <p class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:#6b6b6b">Host</p>
+      <p class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:#888">Host</p>
       <a href="profile.html?id=${host?.id}" class="flex items-center gap-3 p-3 rounded-xl -mx-1 transition-colors"
         style="color:inherit" onmouseover="this.style.background='#1e1e1e'" onmouseout="this.style.background='transparent'">
         <img src="${host?.avatar ?? ""}" class="h-10 w-10 rounded-full" alt="${host?.name ?? ""}" />
         <div>
           <p class="font-semibold text-sm" style="color:#f0f0f0">${host?.name ?? "Unknown"}</p>
-          <p class="text-xs line-clamp-1" style="color:#6b6b6b">${host?.bio ?? ""}</p>
+          <p class="text-xs line-clamp-1" style="color:#888">${host?.bio ?? ""}</p>
         </div>
       </a>
     </div>
 
-    <!-- Attendees -->
     ${attendeeUsers.length > 0 ? `
     <div class="mb-5">
-      <p class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:#6b6b6b">Attendees (${attendeeUsers.length})</p>
+      <p class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:#888">Attendees (${attendeeUsers.length})</p>
       <div class="flex flex-wrap gap-2">
         ${attendeeUsers.map(u => `
           <a href="profile.html?id=${u.id}" class="flex items-center gap-1.5 rounded-full px-2.5 py-1 transition-colors"
             style="background:#1e1e1e" onmouseover="this.style.background='#272727'" onmouseout="this.style.background='#1e1e1e'">
-            <img src="${u.avatar}" class="h-5 w-5 rounded-full" alt="${u.name}" />
-            <span class="text-xs" style="color:#9ca3af">${u.name}</span>
+            <img src="${u.avatar}" class="h-5 w-5 rounded-full" />
+            <span class="text-xs" style="color:#b0b0b0">${u.name}</span>
           </a>`).join("")}
       </div>
     </div>
@@ -309,7 +512,7 @@ function closeModal() {
 window.addEventListener("popstate", e => { if (!e.state?.eventId) closeModal(); });
 document.getElementById("modal-backdrop").addEventListener("click", closeModal);
 
-// ── Mini map (dark tiles) ─────────────────────────────────────────────────────
+// ── Modal mini map ────────────────────────────────────────────────────────────
 function initMiniMap(lat, lng) {
   destroyMiniMap();
   if (!document.getElementById("mini-map")) return;
