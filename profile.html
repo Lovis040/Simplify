@@ -161,7 +161,20 @@
 
       ${hosted.length > 0 ? `
         <h2 class="text-lg font-semibold mb-3" style="color:var(--text)">${isOwn ? "Your events" : u.name.split(" ")[0] + "'s events"}</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">${hosted.map(eventCardHTML).join("")}</div>` : ""}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+          ${hosted.map(ev => `
+            <div style="position:relative">
+              ${eventCardHTML(ev)}
+              ${isOwn ? `
+                <button onclick="deleteOwnEvent('${ev.id}')"
+                  style="position:absolute;top:10px;right:10px;z-index:5;
+                    background:#1c0a0a;border:1px solid #7f1d1d;color:#f87171;
+                    border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;
+                    cursor:pointer;line-height:1.4;transition:background .15s"
+                  onmouseover="this.style.background='#2d0f0f'"
+                  onmouseout="this.style.background='#1c0a0a'">Delete</button>` : ""}
+            </div>`).join("")}
+        </div>` : ""}
 
       ${joined.length > 0 ? `
         <h2 class="text-lg font-semibold mb-3" style="color:var(--text)">${isOwn ? "Events you've joined" : u.name.split(" ")[0] + " joined"}</h2>
@@ -173,6 +186,15 @@
           ${isOwn ? '<a href="index.html" class="inline-block mt-4 text-white font-semibold px-5 py-2.5 rounded-xl" style="background:#4f46e5">Explore events</a>' : ""}
         </div>` : ""}
     `;
+  }
+
+  function deleteOwnEvent(eventId) {
+    if (!confirm("Delete this event? This cannot be undone.")) return;
+    STATE.events = STATE.events.filter(e => e.id !== eventId);
+    const user = STATE.users.find(u => u.id === STATE.currentUserId);
+    if (user && user.eventsCreated > 0) user.eventsCreated--;
+    saveState();
+    renderProfile();
   }
 
   renderHeader();

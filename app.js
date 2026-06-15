@@ -3,6 +3,7 @@ let currentCategory = "all";
 let currentSearch   = "";
 let miniMapInstance = null;
 let nearMeMap       = null; // Leaflet instance for Near Me
+let nearMeMarkers   = {};  // eventId → L.Marker
 let currentTab      = "events";
 
 const CATEGORIES = [
@@ -113,6 +114,7 @@ function initNearMeMap() {
     });
 
     marker.addTo(nearMeMap);
+    nearMeMarkers[event.id] = marker;
   });
 
   document.getElementById("nm-status").textContent = `${STATE.events.length} events in Berlin`;
@@ -335,7 +337,13 @@ function openModal(eventId) {
     actionBtn = `<a href="login.html" class="block w-full text-center text-white font-semibold py-2.5 rounded-xl transition-colors"
       style="background:#4f46e5" onmouseover="this.style.background='#4338ca'" onmouseout="this.style.background='#4f46e5'">Sign in to join</a>`;
   } else if (isHost) {
-    actionBtn = `<p class="text-center text-sm py-2" style="color:#6b6b6b">You are hosting this event</p>`;
+    actionBtn = `
+      <p class="text-center text-sm pb-2" style="color:#6b6b6b">You are hosting this event</p>
+      <button onclick="deleteEvent('${event.id}')" class="w-full font-semibold py-2.5 rounded-xl transition-colors"
+        style="border:1px solid #7f1d1d;color:#f87171;background:transparent"
+        onmouseover="this.style.background='#1c0a0a'" onmouseout="this.style.background='transparent'">
+        Delete event
+      </button>`;
   } else if (isJoined) {
     actionBtn = `<button onclick="leaveEvent('${event.id}')" class="w-full font-semibold py-2.5 rounded-xl transition-colors"
       style="border:1px solid #7f1d1d;color:#f87171;background:transparent"
@@ -486,6 +494,24 @@ function initMiniMap(lat, lng) {
 
 function destroyMiniMap() {
   if (miniMapInstance) { miniMapInstance.remove(); miniMapInstance = null; }
+}
+
+// ── Delete event ──────────────────────────────────────────────────────────────
+function deleteEvent(eventId) {
+  if (!confirm("Delete this event? This cannot be undone.")) return;
+  STATE.events = STATE.events.filter(e => e.id !== eventId);
+  const user = STATE.users.find(u => u.id === STATE.currentUserId);
+  if (user && user.eventsCreated > 0) user.eventsCreated--;
+  saveState();
+  closeModal();
+  renderGrid();
+  // Remove marker from Near Me map if it exists
+  if (nearMeMarkers[eventId]) {
+    nearMeMap.removeLayer(nearMeMarkers[eventId]);
+    delete nearMeMarkers[eventId];
+    renderNmList(STATE.events);
+    document.getElementById("nm-status").textContent = `${STATE.events.length} events in Berlin`;
+  }
 }
 
 // ── Join / Leave ──────────────────────────────────────────────────────────────
