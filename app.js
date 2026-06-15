@@ -63,6 +63,8 @@ function switchTab(tab) {
     viewEvents.style.display     = "none";
     viewNearme.style.display     = "flex";
     initNearMeMap();
+    // Let the browser paint before Leaflet measures the container
+    requestAnimationFrame(() => { if (nearMeMap) nearMeMap.invalidateSize(); });
   }
 }
 
@@ -122,6 +124,8 @@ function initNearMeMap() {
   const statusEl = document.getElementById("nm-status");
   statusEl.textContent = `${STATE.events.length} events in Berlin`;
   renderNmList(STATE.events);
+
+  setTimeout(() => { nearMeMap && nearMeMap.invalidateSize(); }, 100);
 }
 
 function renderNmList(events) {
